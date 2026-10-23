@@ -1,3 +1,4 @@
+
 # Crowd counting
 
 Kode dipisahkan dari notebook crowdcounting.ipynb. Semua file harus berada dalam satu folder. Python 3.10 atau lebih baru.
@@ -12,6 +13,8 @@ Kode dipisahkan dari notebook crowdcounting.ipynb. Semua file harus berada dalam
 - `inference_utils.py`: prediksi dan visualisasi bersama.
 - `inference_photo.py`: inference foto dan heatmap.
 - `inference_video.py`: inference setiap frame, video beranotasi, dan CSV hitungan per frame.
+- `app.py`: antarmuka web Streamlit untuk upload gambar/video, menjalankan prediksi, menampilkan heatmap, grafik, serta mengunduh hasil.
+- `requirements.txt`: daftar library Python yang diperlukan untuk menjalankan project.
 
 ## Jalankan
 
@@ -36,6 +39,8 @@ Jika output_dir diubah, sesuaikan --checkpoint juga. Inferensi tidak mengunduh b
 
 `outputs/` berisi best_csrnet.pth, last_csrnet.pth, training_history.csv, training_curves.png, valid_predictions.csv, test_predictions.csv, metrics.json, dan salinan config. Training menggunakan batch size 1 dan MSE mean terhadap density map. MAE/RMSE dihitung dari jumlah prediksi dibanding jumlah titik anotasi; count tidak dibulatkan atau dipotong saat evaluasi.
 
+Inferensi gambar melalui `inference_photo.py` menghasilkan gambar dengan overlay heatmap, file `.npy` berisi density map, dan file `.json` berisi estimasi jumlah orang. Sementara itu, `inference_video.py` menghasilkan video beranotasi dan file `.csv` berisi estimasi jumlah orang pada setiap frame beserta waktunya.
+
 Dataset training dibagi deterministik 80:20 sesuai config; pembagian ini disimpan dalam manifest sehingga tidak berubah saat training ulang. Kepadatan dihitung pada resolusi 1/8, setiap Gaussian dinormalisasi menjadi 1, dan titik tepi dijepit ke batas map agar tidak hilang. Manifest menggunakan path absolut; jalankan preprocessing lagi setelah memindahkan dataset.
 
 Arsitektur dipertahankan dari notebook, bukan diganti ke CSRNet paper. Checkpoint lama dengan key model_state dan arsitektur notebook dapat dipakai untuk inference. Checkpoint untuk backend CSRNet asli tidak kompatibel.
@@ -52,6 +57,24 @@ streamlit run app.py
 ```
 
 Isi lokasi checkpoint di sidebar, pilih CPU/GPU, lalu upload gambar atau video dan klik Proses. Checkpoint default: outputs/best_csrnet.pth. File checkpoint disediakan lokal; gambar/video dapat diupload lewat antarmuka.
+
+### Cara Menggunakan Aplikasi
+
+1. Jalankan aplikasi menggunakan `streamlit run app.py`.
+2. Masukkan lokasi checkpoint model pada sidebar.
+3. Pilih perangkat CPU atau GPU yang tersedia.
+4. Pilih jenis input berupa gambar atau video.
+5. Upload file yang ingin dianalisis.
+6. Klik tombol Proses untuk menjalankan prediksi.
+7. Lihat estimasi jumlah orang dan visualisasi density heatmap.
+8. Unduh hasil pemrosesan jika diperlukan.
+
+### Format Input yang Didukung
+
+- Gambar: JPG, JPEG, PNG, dan WEBP.
+- Video: MP4, MOV, AVI, dan MKV.
+
+Aplikasi memproses gambar sebagai satu citra, sedangkan video dianalisis frame demi frame menggunakan model yang sama.
 
 Gambar menghasilkan estimasi count, overlay heatmap, gambar unduhan, dan density NPY. Video menghasilkan preview selama proses, MP4 H.264 untuk browser, grafik count terhadap waktu, serta CSV setiap frame. File sementara dibersihkan setelah pemrosesan. Video hasil tidak memiliki audio dan tidak menghitung pengunjung unik. Pemrosesan semua frame bisa lama untuk video panjang. Batas upload default Streamlit adalah 200 MB; untuk mengubahnya:
 
