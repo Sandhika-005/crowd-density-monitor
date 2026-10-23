@@ -1,0 +1,14 @@
+{
+  "train_path": "/kaggle/input/datasets/tthien/shanghaitech/ShanghaiTech/part_B/train_data",
+  "test_path": "/kaggle/input/datasets/tthien/shanghaitech/ShanghaiTech/part_B/test_data",
+  "processed_dir": "processed",
+  "output_dir": "outputs",
+  "seed": 42,
+  "validation_ratio": 0.2,
+  "density_mode": "adaptive",
+  "fixed_sigma": 4.0,
+  "epochs": 40,
+  "learning_rate": 0.000001,
+  "num_workers": 0,
+  "pretrained": true
+}

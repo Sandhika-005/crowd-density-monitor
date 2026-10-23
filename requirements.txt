@@ -1,0 +1,11 @@
+torch
+torchvision
+numpy
+scipy
+pandas
+Pillow
+opencv-python
+matplotlib
+tqdm
+streamlit>=1.44
+imageio-ffmpeg
