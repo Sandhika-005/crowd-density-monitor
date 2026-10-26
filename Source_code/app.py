@@ -1,61 +1,3 @@
-import io
-import subprocess
-import tempfile
-import time
-from pathlib import Path
-
-import cv2
-import imageio_ffmpeg
-import numpy as np
-import pandas as pd
-import streamlit as st
-import torch
-from PIL import Image
-
-from inference_utils import predict, visualize
-from model import load_model
-
-
-st.set_page_config(page_title="Crowd Counting", page_icon="👥", layout="wide")
-
-
-@st.cache_resource(max_entries=2)
-def cached_model(path, modified, device_name):
-    return load_model(path, torch.device(device_name))
-
-
-def photo_demo(upload, model, device):
-    try:
-        rgb = np.array(Image.open(upload).convert("RGB"))
-    except Exception as error:
-        st.error(f"Gambar tidak bisa dibaca: {error}")
-        return
-    frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    with st.spinner("Memproses gambar..."):
-        started = time.perf_counter()
-        count, density = predict(model, frame, device)
-        overlay = visualize(frame, count, density)
-    st.metric("Estimasi jumlah orang", f"{count:.1f}")
-    st.caption(f"Waktu proses: {time.perf_counter() - started:.2f} detik")
-    left, right = st.columns(2)
-    left.image(rgb, caption="Gambar asli", use_container_width=True)
-    right.image(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB), caption="Density heatmap", use_container_width=True)
-    success, encoded = cv2.imencode(".jpg", overlay)
-    if not success:
-        raise OSError("Gagal membuat gambar hasil.")
-    st.download_button("Unduh gambar hasil", encoded.tobytes(), "crowd_result.jpg", "image/jpeg", on_click="ignore")
-    buffer = io.BytesIO()
-    np.save(buffer, density)
-    st.download_button("Unduh density map", buffer.getvalue(), "density.npy", "application/octet-stream", on_click="ignore")
-
-
-def video_demo(upload, model, device):
-    with tempfile.TemporaryDirectory() as temporary:
-        directory = Path(temporary)
-        source = directory / ("source" + Path(upload.name).suffix.lower())
-        source.write_bytes(upload.getvalue())
-        capture = cv2.VideoCapture(str(source))
-        writer = None
         progress = st.progress(0.0)
         status = st.empty()
         preview = st.empty()
@@ -112,7 +54,6 @@ def video_demo(upload, model, device):
         st.download_button("Unduh video hasil", video_bytes, "crowd_result.mp4", "video/mp4", on_click="ignore")
         st.download_button("Unduh hitungan per frame", results.to_csv(index=False).encode(), "video_counts.csv", "text/csv", on_click="ignore")
 
-
 def main():
     st.title("Crowd Counting Demo")
     st.write("Upload gambar atau video untuk melihat estimasi jumlah orang dan density heatmap.")
@@ -124,11 +65,16 @@ def main():
         st.caption("Gunakan checkpoint dari arsitektur notebook atau paket training ini.")
     mode = st.radio("Jenis input", ["Gambar", "Video"], horizontal=True)
     types = ["jpg", "jpeg", "png", "webp"] if mode == "Gambar" else ["mp4", "mov", "avi", "mkv"]
-    upload = st.file_uploader("Pilih file", type=types)
+    upload = st.file_uploader("Pilih file", type=types, accept_multiple_files=(mode == "Gambar"))
     if mode == "Video":
         st.caption("Hitungan dihitung per frame, bukan total pengunjung unik. Video hasil tanpa audio.")
-    submitted = st.button("Proses " + mode.lower(), type="primary", disabled=upload is None)
-    state_key = (mode, upload.file_id if upload else None, checkpoint_path, device_name)
+    has_upload = bool(upload) if mode == "Gambar" else upload is not None
+    submitted = st.button("Proses " + mode.lower(), type="primary", disabled=not has_upload)
+    if mode == "Gambar":
+        upload_key = tuple((file.file_id, file.name, file.size) for file in upload)
+    else:
+        upload_key = (upload.file_id, upload.name, upload.size) if upload is not None else None
+    state_key = (mode, upload_key, checkpoint_path, device_name)
     if st.session_state.get("input_key") != state_key:
         st.session_state["input_key"] = state_key
         st.session_state["processed_key"] = None
@@ -142,7 +88,7 @@ def main():
             st.session_state["processed_key"] = state_key
             device = torch.device(device_name)
             if mode == "Gambar":
-                photo_demo(upload, model, device)
+                multiple_photo_demo(upload, model, device)
             else:
                 video_demo(upload, model, device)
         except Exception as error:
@@ -150,7 +96,6 @@ def main():
             st.error(f"Pemrosesan gagal: {error}")
     elif st.session_state.get("processed_key") == state_key:
         st.info("Klik Proses kembali untuk menampilkan hasil. Unduh hasil sebelum mengubah input.")
-
 
 if __name__ == "__main__":
     main()
