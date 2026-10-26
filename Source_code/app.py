@@ -1,3 +1,13 @@
+    else:
+        st.warning("Tidak ada gambar yang berhasil diproses.")
+
+def video_demo(upload, model, device):
+    with tempfile.TemporaryDirectory() as temporary:
+        directory = Path(temporary)
+        source = directory / ("source" + Path(upload.name).suffix.lower())
+        source.write_bytes(upload.getvalue())
+        capture = cv2.VideoCapture(str(source))
+        writer = None
         progress = st.progress(0.0)
         status = st.empty()
         preview = st.empty()
