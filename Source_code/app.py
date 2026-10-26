@@ -1,3 +1,99 @@
+import io
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
+import cv2
+import imageio_ffmpeg
+import numpy as np
+import pandas as pd
+import streamlit as st
+import torch
+from PIL import Image
+
+from inference_utils import predict, visualize
+from model import load_model
+
+
+st.set_page_config(page_title="Crowd Counting", page_icon="👥", layout="wide")
+
+
+@st.cache_resource(max_entries=2)
+def cached_model(path, modified, device_name):
+    return load_model(path, torch.device(device_name))
+
+def photo_demo(upload, model, device):
+    try:
+        rgb = np.array(Image.open(upload).convert("RGB"))
+    except Exception as error:
+        st.error(f"Gambar tidak bisa dibaca: {error}")
+        return
+    frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    with st.spinner("Memproses gambar..."):
+        started = time.perf_counter()
+        count, density = predict(model, frame, device)
+        overlay = visualize(frame, count, density)
+    st.metric("Estimasi jumlah orang", f"{count:.1f}")
+    st.caption(f"Waktu proses: {time.perf_counter() - started:.2f} detik")
+    left, right = st.columns(2)
+    left.image(rgb, caption="Gambar asli", use_container_width=True)
+    right.image(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB), caption="Density heatmap", use_container_width=True)
+    success, encoded = cv2.imencode(".jpg", overlay)
+    if not success:
+        raise OSError("Gagal membuat gambar hasil.")
+    st.download_button("Unduh gambar hasil", encoded.tobytes(), "crowd_result.jpg", "image/jpeg", on_click="ignore")
+    buffer = io.BytesIO()
+    np.save(buffer, density)
+    st.download_button("Unduh density map", buffer.getvalue(), "density.npy", "application/octet-stream", on_click="ignore")
+
+def multiple_photo_demo(uploads, model, device):
+    total_count = 0.0
+    processed_count = 0
+    for index, upload in enumerate(uploads, start=1):
+        try:
+            rgb = np.array(Image.open(upload).convert("RGB"))
+            frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            with st.spinner(f"Memproses gambar {index}/{len(uploads)}: {upload.name}..."):
+                started = time.perf_counter()
+                count, density = predict(model, frame, device)
+                overlay = visualize(frame, count, density)
+            total_count += count
+            processed_count += 1
+            st.subheader(f"{index}. {upload.name}")
+            st.metric("Estimasi jumlah orang", f"{count:.1f}")
+            st.caption(f"Waktu proses: {time.perf_counter() - started:.2f} detik")
+            left, right = st.columns(2)
+            left.image(rgb, caption=f"Gambar asli: {upload.name}", use_container_width=True)
+            right.image(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB), caption="Density heatmap", use_container_width=True)
+            success, encoded = cv2.imencode(".jpg", overlay)
+            if not success:
+                raise OSError("Gagal membuat gambar hasil.")
+            safe_stem = Path(upload.name).stem or f"gambar_{index}"
+            st.download_button(
+                "Unduh gambar hasil",
+                encoded.tobytes(),
+                f"{safe_stem}_crowd_result.jpg",
+                "image/jpeg",
+                key=f"image_result_{index}_{upload.file_id}",
+                on_click="ignore",
+            )
+            buffer = io.BytesIO()
+            np.save(buffer, density)
+            st.download_button(
+                "Unduh density map",
+                buffer.getvalue(),
+                f"{safe_stem}_density.npy",
+                "application/octet-stream",
+                key=f"density_result_{index}_{upload.file_id}",
+                on_click="ignore",
+            )
+        except Exception as error:
+            st.error(f"Gambar '{upload.name}' gagal diproses: {error}")
+    if processed_count:
+        st.divider()
+        st.metric("Total estimasi jumlah orang dari semua gambar", f"{total_count:.1f}")
+        st.caption("Total merupakan penjumlahan estimasi setiap gambar. Orang yang muncul di beberapa gambar tetap dihitung pada setiap gambar.")
     else:
         st.warning("Tidak ada gambar yang berhasil diproses.")
 
